@@ -1,0 +1,16 @@
+{
+  "name": "Light & Clean",
+  "description": "Bright and uncluttered: light mode, a quiet slate accent and a soft, simple wallpaper.",
+  "order": 3,
+  "settings": {
+    "appsTheme": "light",
+    "systemTheme": "light",
+    "accentColor": "#5E6B7D",
+    "accentOnTitleBars": false,
+    "accentOnTaskbar": false,
+    "transparency": true,
+    "taskbarSearch": "icon",
+    "taskbarWidgets": false,
+    "wallpaper": "builtin:soft-light"
+  }
+}

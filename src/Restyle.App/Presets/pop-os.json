@@ -1,0 +1,18 @@
+{
+  "name": "Pop!_OS-like",
+  "description": "Inspired by System76's Pop!_OS: dark slate, teal accent, centered taskbar, flat look, mountain-and-sun wallpaper.",
+  "order": 22,
+  "settings": {
+    "appsTheme": "dark",
+    "systemTheme": "dark",
+    "accentColor": "#48B9C7",
+    "accentOnTitleBars": false,
+    "accentOnTaskbar": false,
+    "transparency": false,
+    "taskbarAlignment": "center",
+    "taskbarSearch": "icon",
+    "taskbarWidgets": false,
+    "taskbarTaskView": true,
+    "wallpaper": "builtin:pop-peaks"
+  }
+}

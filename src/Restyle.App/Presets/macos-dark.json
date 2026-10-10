@@ -1,0 +1,19 @@
+{
+  "name": "Mac-like (Dark)",
+  "description": "macOS dark mode feel: dark everything, Apple-style blue, centered dock-like taskbar, frosted glass, deep night waves.",
+  "order": 11,
+  "settings": {
+    "appsTheme": "dark",
+    "systemTheme": "dark",
+    "accentColor": "#0A84FF",
+    "accentOnTitleBars": false,
+    "accentOnTaskbar": false,
+    "transparency": true,
+    "taskbarAlignment": "center",
+    "taskbarSearch": "hidden",
+    "taskbarWidgets": false,
+    "taskbarTaskView": false,
+    "cursorScheme": "Windows Black",
+    "wallpaper": "builtin:midnight-waves"
+  }
+}

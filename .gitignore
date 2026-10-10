@@ -1,0 +1,16 @@
+# Build output
+bin/
+obj/
+out/
+publish/
+TestResults/
+*.msix
+*.cer
+*.pfx
+
+# Editors
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo

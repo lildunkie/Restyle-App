@@ -1,0 +1,18 @@
+{
+  "name": "GNOME-like",
+  "description": "Dark and calm like Ubuntu/Fedora's GNOME desktop: blue accent, centered taskbar, uncluttered taskbar, flat look.",
+  "order": 1,
+  "settings": {
+    "appsTheme": "dark",
+    "systemTheme": "dark",
+    "accentColor": "#3584E4",
+    "accentOnTitleBars": false,
+    "accentOnTaskbar": false,
+    "transparency": false,
+    "taskbarAlignment": "center",
+    "taskbarSearch": "hidden",
+    "taskbarWidgets": false,
+    "taskbarTaskView": true,
+    "wallpaper": "builtin:gnome-blobs"
+  }
+}

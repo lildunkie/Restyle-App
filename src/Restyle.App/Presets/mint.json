@@ -1,0 +1,18 @@
+{
+  "name": "Linux Mint-like",
+  "description": "Friendly and familiar like Linux Mint's Cinnamon: light windows with a dark taskbar on the left, fresh green accent, green hills.",
+  "order": 21,
+  "settings": {
+    "appsTheme": "light",
+    "systemTheme": "dark",
+    "accentColor": "#35A854",
+    "accentOnTitleBars": false,
+    "accentOnTaskbar": false,
+    "transparency": true,
+    "taskbarAlignment": "left",
+    "taskbarSearch": "icon",
+    "taskbarWidgets": false,
+    "taskbarTaskView": true,
+    "wallpaper": "builtin:mint-hills"
+  }
+}

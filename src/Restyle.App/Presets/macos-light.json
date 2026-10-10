@@ -1,0 +1,19 @@
+{
+  "name": "Mac-like (Light)",
+  "description": "Bright and airy like macOS: light mode, Apple-style blue, centered dock-like taskbar, black pointer, soft blue waves.",
+  "order": 10,
+  "settings": {
+    "appsTheme": "light",
+    "systemTheme": "light",
+    "accentColor": "#007AFF",
+    "accentOnTitleBars": false,
+    "accentOnTaskbar": false,
+    "transparency": true,
+    "taskbarAlignment": "center",
+    "taskbarSearch": "hidden",
+    "taskbarWidgets": false,
+    "taskbarTaskView": false,
+    "cursorScheme": "Windows Black",
+    "wallpaper": "builtin:aqua-waves"
+  }
+}

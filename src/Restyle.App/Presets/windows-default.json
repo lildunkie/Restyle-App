@@ -1,0 +1,21 @@
+{
+  "name": "Windows Default",
+  "description": "Puts back the look Windows ships with. (To get back exactly what you had before Restyle, use Backups > Restore my original settings.)",
+  "order": 99,
+  "settings": {
+    "appsTheme": "light",
+    "systemTheme": "light",
+    "accentColor": "#0078D4",
+    "accentOnTitleBars": false,
+    "accentOnTaskbar": false,
+    "transparency": true,
+    "taskbarAlignment": "center",
+    "taskbarAutoHide": false,
+    "taskbarSearch": "box",
+    "taskbarWidgets": true,
+    "taskbarTaskView": true,
+    "desktopIcons": true,
+    "cursorScheme": "Windows Default",
+    "wallpaper": "%SystemRoot%\\Web\\Wallpaper\\Windows\\img0.jpg"
+  }
+}

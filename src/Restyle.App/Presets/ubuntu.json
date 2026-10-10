@@ -1,0 +1,18 @@
+{
+  "name": "Ubuntu-like",
+  "description": "Ubuntu's signature look: dark mode, warm orange accent, taskbar on the left like Ubuntu's dock, aubergine wallpaper.",
+  "order": 20,
+  "settings": {
+    "appsTheme": "dark",
+    "systemTheme": "dark",
+    "accentColor": "#E95420",
+    "accentOnTitleBars": false,
+    "accentOnTaskbar": false,
+    "transparency": true,
+    "taskbarAlignment": "left",
+    "taskbarSearch": "icon",
+    "taskbarWidgets": false,
+    "taskbarTaskView": true,
+    "wallpaper": "builtin:aubergine"
+  }
+}

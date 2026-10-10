@@ -1,0 +1,6 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Restyle.App/Restyle.App.csproj" />
+    <Project Path="src/Restyle.Core/Restyle.Core.csproj" />
+  </Folder>
+</Solution>

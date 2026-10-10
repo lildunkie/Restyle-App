@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- The Windows SDK target gives access to the Wi-Fi/Bluetooth device APIs used by the control center. -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>Restyle</AssemblyName>
+    <RootNamespace>Restyle.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\restyle.ico</ApplicationIcon>
+    <!-- WPF's Fluent ThemeMode API is marked experimental; we opt in. -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <!-- Only ship English framework resources: keeps the single-file exe much smaller. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- A small UI app doesn't need a background GC thread; this keeps the heap smaller. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Restyle.Core\Restyle.Core.csproj" />
+    <PackageReference Include="System.Management" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Small GC nursery (1 MB): the default is sized to the CPU cache and lets a UI app this size
+         hold tens of MB of garbage between collections. -->
+    <RuntimeHostConfigurationOption Include="System.GC.Gen0Size" Value="0x100000" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\restyle.ico" />
+    <!-- Presets ship as editable files next to the exe... -->
+    <Content Include="Presets\*.json" CopyToOutputDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <!-- ...and are also embedded, in case only the exe was copied somewhere. -->
+    <EmbeddedResource Include="Presets\*.json" LogicalName="Presets.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

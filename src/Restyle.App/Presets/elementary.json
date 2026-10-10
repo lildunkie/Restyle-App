@@ -1,0 +1,18 @@
+{
+  "name": "elementary OS-like",
+  "description": "Clean and Mac-adjacent like elementary OS: light mode, calm blue accent, centered dock-like taskbar, minimal buttons.",
+  "order": 23,
+  "settings": {
+    "appsTheme": "light",
+    "systemTheme": "light",
+    "accentColor": "#3689E6",
+    "accentOnTitleBars": false,
+    "accentOnTaskbar": false,
+    "transparency": true,
+    "taskbarAlignment": "center",
+    "taskbarSearch": "hidden",
+    "taskbarWidgets": false,
+    "taskbarTaskView": false,
+    "wallpaper": "builtin:soft-light"
+  }
+}
