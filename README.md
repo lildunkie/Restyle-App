@@ -104,12 +104,6 @@ Memory is kept low by software rendering (no GPU driver stack), a small GC nurse
 (`System.GC.Gen0Size` in the csproj) and idle heap compaction in the dock. Single-file compression is
 turned off on purpose: it halves the file but costs ~85 MB more RAM at runtime.
 
-### Microsoft Store edition
-
-`src/Restyle.Store` builds the same app as an `.msix` for the Microsoft Store (startup task instead of
-the Run key; Store-signed, auto-updating). Build it with `store\build-msix.ps1`; see
-[store/STORE-SUBMISSION.md](store/STORE-SUBMISSION.md) for the full submission walkthrough.
-
 ## What Restyle changes
 
 All values are under `HKEY_CURRENT_USER` unless noted. Changes are broadcast with `WM_SETTINGCHANGE`
