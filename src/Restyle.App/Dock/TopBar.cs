@@ -55,6 +55,7 @@ public sealed class TopBar : Window
     {
         _dock = dock;
         Title = "Restyle Top Bar";
+        UseLayoutRounding = true; // crisp icons and text at any display scaling
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -71,7 +72,7 @@ public sealed class TopBar : Window
         grid.ColumnDefinitions.Add(new ColumnDefinition());
 
         var left = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 0, 0, 0) };
-        left.Children.Add(BarButton(new Image { Source = DockWindow.StartIcon, Width = 18, Height = 18 }, ShellNative.OpenStartMenu, "Start"));
+        left.Children.Add(BarButton(new Image { Source = DockWindow.StartIcon, Width = 18, Height = 18 }, _dock.OpenStart, "Start"));
         _appName.Margin = new Thickness(8, 0, 0, 0);
         left.Children.Add(_appName);
         grid.Children.Add(left);

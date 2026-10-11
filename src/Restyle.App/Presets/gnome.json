@@ -13,6 +13,7 @@
     "taskbarSearch": "hidden",
     "taskbarWidgets": false,
     "taskbarTaskView": true,
-    "wallpaper": "builtin:gnome-blobs"
+    "wallpaper": "builtin:gnome-blobs",
+    "lockScreen": "builtin:gnome-blobs-lock"
   }
 }

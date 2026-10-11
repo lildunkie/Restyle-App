@@ -62,6 +62,11 @@ public sealed class PresetDialog : Window
             warning.SetValue(TextElement.FontWeightProperty, FontWeights.SemiBold);
             root.Children.Add(warning);
         }
+        if (Plan.Changes.Any(c => c.Setting.Id == "desktopWidgets" && c.After?.GetValueKind() == System.Text.Json.JsonValueKind.True))
+        {
+            root.Children.Add(Note("", "The widgets run with the Restyle dock. Weather and news headlines stay off until you turn them on " +
+                "on the Widgets page (they're the only parts that use the internet). Right-click an app tile to change it."));
+        }
         if (Plan.NeedsExplorerRestart)
             root.Children.Add(Note("", "Part of this needs Windows Explorer to restart. Restyle will ask you first."));
 

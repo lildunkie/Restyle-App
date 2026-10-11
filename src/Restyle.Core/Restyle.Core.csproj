@@ -4,4 +4,8 @@
     <RootNamespace>Restyle.Core</RootNamespace>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Restyle.Core.Tests" />
+  </ItemGroup>
+
 </Project>

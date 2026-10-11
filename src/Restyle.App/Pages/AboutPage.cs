@@ -37,8 +37,11 @@ public sealed class AboutPage : UserControl
         var buttons = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
         buttons.Children.Add(Ui.Button("Open Restyle's data folder", (_, _) => OpenFolder(s.DataDirectory),
             tip: "Backups, your presets, history and generated wallpapers live here."));
+#if !STORE
+        // Store apps are installed to a protected folder, so this is only offered in the download version.
         buttons.Children.Add(Ui.Button("Open built-in presets folder", (_, _) => OpenFolder(s.Presets.BuiltInDirectory),
             tip: "The presets that ship with Restyle. Edit them with any text editor."));
+#endif
         root.Children.Add(buttons);
     }
 

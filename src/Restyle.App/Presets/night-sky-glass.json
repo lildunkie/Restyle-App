@@ -1,0 +1,26 @@
+{
+  "name": "Night Sky Glass",
+  "description": "Starry blue night with soft clouds, a big centered clock with weather and date, and liquid-glass media and volume pills above a small dock. Matching Start menu.",
+  "order": 14,
+  "settings": {
+    "appsTheme": "dark",
+    "systemTheme": "dark",
+    "accentColor": "#5AA9FF",
+    "accentOnTitleBars": false,
+    "accentOnTaskbar": true,
+    "transparency": true,
+    "taskbarAlignment": "center",
+    "wallpaper": "builtin:night-sky",
+    "lockScreen": "builtin:night-sky-lock",
+    "dockHideTaskbar": true,
+    "dockTopBar": false,
+    "dockStyle": "glass",
+    "dockPosition": "bottom",
+    "dockBar": true,
+    "dockStartMenu": true,
+    "widgetLayout": "glass",
+    "widgetGlass": true,
+    "desktopWidgets": true,
+    "dock": true
+  }
+}

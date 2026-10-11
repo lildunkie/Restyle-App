@@ -295,6 +295,33 @@ internal static class ShellNative
         return image;
     }
 
+    /// <summary>
+    /// Every app in the Start menu's "All apps" list (desktop and Store apps), as name + ID.
+    /// The ID launches it via shell:AppsFolder\ID and gives its icon.
+    /// </summary>
+    public static List<(string Name, string Id)> ListApps()
+    {
+        var apps = new List<(string, string)>();
+        dynamic shell = Activator.CreateInstance(Type.GetTypeFromProgID("Shell.Application")!)!;
+        try
+        {
+            foreach (var item in shell.NameSpace("shell:AppsFolder").Items())
+            {
+                string name = item.Name;
+                string id = item.Path;
+                // Skip loose links to documents/uninstallers ("file:///...") that Windows also lists here.
+                if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(id) && !id.StartsWith("file:", StringComparison.OrdinalIgnoreCase))
+                    apps.Add((name, id));
+            }
+        }
+        finally
+        {
+            Marshal.FinalReleaseComObject(shell);
+        }
+
+        return apps.OrderBy(a => a.Item1, StringComparer.CurrentCultureIgnoreCase).ToList();
+    }
+
     private static string? ShellDisplayName(string parsingName)
     {
         try

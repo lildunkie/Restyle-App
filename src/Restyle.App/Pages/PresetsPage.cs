@@ -40,7 +40,7 @@ public sealed class PresetsPage : UserControl, IPage
         var mine = presets.Where(p => !p.IsBuiltIn).ToList();
         _root.Children.Add(mine.Count > 0
             ? CardList(mine, current)
-            : Ui.Text("You haven't saved any yet. Set things up the way you like on the Customize page, then save it here as a preset.",
+            : Ui.Text("You haven't saved any yet. Set things up the way you like on the Appearance, Taskbar & Start, Dock and Widgets pages, then save it here as a preset.",
                 "Hint", new Thickness(2, 0, 0, 8)));
 
         var actions = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };

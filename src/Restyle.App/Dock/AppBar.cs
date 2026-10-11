@@ -11,12 +11,15 @@ internal sealed class AppBar(IntPtr hwnd, bool top = false) : IDisposable
     public const int ABN_POSCHANGED = 1;
     public const int ABN_FULLSCREENAPP = 2;
 
+    public const uint ABE_LEFT = 0, ABE_TOP = 1, ABE_RIGHT = 2, ABE_BOTTOM = 3;
     private const uint ABM_NEW = 0, ABM_REMOVE = 1, ABM_QUERYPOS = 2, ABM_SETPOS = 3;
-    private const uint ABE_TOP = 1, ABE_BOTTOM = 3;
 
     public uint CallbackMessage { get; } = RegisterWindowMessage(top ? "RestyleTopBarAppBar" : "RestyleDockAppBar");
 
     public bool IsRegistered { get; private set; }
+
+    /// <summary>The screen edge the bar sits on (ABE_*). Defaults to top for the top bar, bottom otherwise.</summary>
+    public uint Edge { get; set; } = top ? ABE_TOP : ABE_BOTTOM;
 
     public void Register()
     {
@@ -28,27 +31,36 @@ internal sealed class AppBar(IntPtr hwnd, bool top = false) : IDisposable
     }
 
     /// <summary>
-    /// Reserves a band of <paramref name="thicknessPx"/> physical pixels at the top or bottom of the primary screen.
+    /// Reserves a band of <paramref name="thicknessPx"/> physical pixels along <see cref="Edge"/> of the primary screen.
     /// </summary>
-    /// <returns>The outer edge (physical px) the bar should sit against: its top for a top bar, its bottom otherwise.</returns>
+    /// <returns>The outer edge (physical px) the bar should sit against: its top/bottom/left/right side respectively.</returns>
     public int Reserve(int thicknessPx)
     {
         var data = Data();
-        data.uEdge = top ? ABE_TOP : ABE_BOTTOM;
+        data.uEdge = Edge;
         data.rc = new RECT { Left = 0, Right = GetSystemMetrics(0), Top = 0, Bottom = GetSystemMetrics(1) };
-        if (top)
-            data.rc.Bottom = data.rc.Top + thicknessPx;
-        else
-            data.rc.Top = data.rc.Bottom - thicknessPx;
-
+        Fit(ref data.rc, thicknessPx);
         SHAppBarMessage(ABM_QUERYPOS, ref data); // Windows moves the rect clear of other bars
-
-        if (top)
-            data.rc.Bottom = data.rc.Top + thicknessPx;
-        else
-            data.rc.Top = data.rc.Bottom - thicknessPx;
+        Fit(ref data.rc, thicknessPx);
         SHAppBarMessage(ABM_SETPOS, ref data);
-        return top ? data.rc.Top : data.rc.Bottom;
+        return Edge switch
+        {
+            ABE_TOP => data.rc.Top,
+            ABE_LEFT => data.rc.Left,
+            ABE_RIGHT => data.rc.Right,
+            _ => data.rc.Bottom,
+        };
+    }
+
+    private void Fit(ref RECT rc, int thickness)
+    {
+        switch (Edge)
+        {
+            case ABE_TOP: rc.Bottom = rc.Top + thickness; break;
+            case ABE_LEFT: rc.Right = rc.Left + thickness; break;
+            case ABE_RIGHT: rc.Left = rc.Right - thickness; break;
+            default: rc.Top = rc.Bottom - thickness; break;
+        }
     }
 
     /// <summary>Explorer forgets app bars when it restarts; call this so the next Register() re-adds us.</summary>

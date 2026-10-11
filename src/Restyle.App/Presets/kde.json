@@ -13,6 +13,7 @@
     "taskbarSearch": "icon",
     "taskbarWidgets": false,
     "taskbarTaskView": true,
-    "wallpaper": "builtin:plasma-shapes"
+    "wallpaper": "builtin:plasma-shapes",
+    "lockScreen": "builtin:plasma-shapes-lock"
   }
 }

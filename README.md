@@ -2,7 +2,8 @@
 
 Make Windows look the way you want: macOS, GNOME, KDE Plasma, Ubuntu, Linux Mint, Pop!_OS, elementary OS,
 or your own style. One-click presets, an optional Mac-style dock and top bar, and every change can be undone.
-Restyle never modifies Windows system files, never needs admin rights, and never connects to the internet.
+Restyle never modifies Windows system files, never needs admin rights, and works entirely offline. The only
+exceptions are the optional weather and news widgets, which stay off until you turn them on.
 
 ## Download
 
@@ -14,23 +15,27 @@ Get the latest `Restyle-win-x64.zip` from the [Releases](../../releases) page, u
 
 ## Features
 
-- **Presets**: GNOME, KDE, Mac (light/dark), Ubuntu, Linux Mint, Pop!_OS, elementary OS, Light & Clean and
-  Windows Default, plus your own. Each one shows exactly what will change (before → after) before it's applied.
+- **Presets**: GNOME, KDE, Mac (light/dark), Ubuntu, Linux Mint, Pop!_OS, elementary OS, Widgets Desktop, Night Sky Glass, Moonlit, Liquid Glass,
+  Light & Clean and Windows Default, plus your own. Each one shows exactly what will change (before → after) before it's applied.
   Save, export and import presets as small JSON files.
-- **Customize**: light/dark mode (apps and Windows separately), accent color, accent on title bars/taskbar,
-  transparency, taskbar alignment/auto-hide/Search/Widgets/Task View, nine original built-in wallpapers,
-  mouse pointer schemes (including importing cursor packs), desktop icons.
+- **Pages**: *Presets*, *Appearance* (colors, wallpaper, lock screen picture, desktop icons, pointer), *Taskbar & Start* (Windows taskbar options, hiding it, Restyle Start menu, top bar), *Dock*, *Widgets* (desktop widgets, weather and news, lock screen widgets), *Backups*.
+- **Appearance**: light/dark mode (apps and Windows separately), accent color, accent on title bars/taskbar,
+  transparency, taskbar alignment/auto-hide/Search/Widgets/Task View, thirteen original built-in wallpapers,
+  mouse pointer schemes (including importing cursor packs), desktop icons, and a lock screen picture that matches each wallpaper.
 - **Dock, top bar and control center** (optional): see [below](#dock-optional).
+- **Desktop widgets** (optional): world clock map, big clock, weather, analog clock, app shortcuts, volume and
+  brightness sliders, now playing, and a calendar with a note. See [Desktop widgets](#desktop-widgets).
 - **Backups**: your original settings are saved automatically on first launch. *Undo last change* (survives
   restarts), *Restore my original settings*, and named backups.
 - **Safe and private**: only per-user (HKCU) settings and documented Windows APIs; no uxtheme patching or theme
-  DLLs; no network access, accounts, ads or telemetry. All data stays in `%LOCALAPPDATA%\Restyle`.
+  DLLs; no accounts, ads or telemetry, and no network access unless you turn on the weather or news widget.
+  All data stays in `%LOCALAPPDATA%\Restyle`.
 - **Light**: about 40–50 MB of memory for the settings window and 35–45 MB for the dock + top bar.
 
 ## Dock (optional)
 
 A Mac-style dock: Start button, pinned apps, open apps (with a dot), the Recycle Bin, hover magnification
-and a launch "bounce". Turn it on from the **Dock** page or run `Restyle.exe --dock`.
+and a launch "bounce". Turn it on from the **Dock** page or run `Restyle.exe --dock`. Five **styles** (Mac, Liquid glass, Transparent, Bar, Minimal pill) and three **positions** (bottom, left, right); pick them on the Dock page or right-click the dock.
 
 - Click an app to open it, bring it to the front, or minimize it (several windows: click to cycle).
 - Right-click an app for *Open new window*, *Close*, *Keep in Dock* / *Remove from Dock*. Right-click the
@@ -51,12 +56,32 @@ and a launch "bounce". Turn it on from the **Dock** page or run `Restyle.exe --d
   shortcuts to Windows Quick Settings, Notifications, Settings and Lock.
 - Settings live in `%LOCALAPPDATA%\Restyle\dock.json`; a running dock picks up changes instantly.
 
+### Desktop widgets
+
+Turn them on from the **Widgets** page or with the **Widgets Desktop**, **Night Sky Glass**, **Moonlit** or **Liquid Glass** presets. Three styles: **Tiles** (below), **Glass clock** (a big centered clock with weather and date, plus media and volume pills above the dock) and **Corners** (big date with music bars that move with your sound, a two-tone clock, weather, and an app column). **Liquid glass** draws the panels as frosted glass: each shows a pre-blurred copy of your wallpaper, so it costs nothing per frame. They run inside the dock process,
+sit on the desktop behind your windows, and stay visible with *Show desktop* (Win+D).
+
+- **World clock map** with the local time in eight cities (Windows time zones; no internet).
+- **Big clock and date**, with three headlines from a news feed you choose. With news off, it shows your
+  Wi-Fi, battery and volume instead.
+- **Weather** for a city you set (current temperature, conditions, high/low; refreshed every 30 minutes).
+- **Analog clock**, **four app shortcuts** (right-click one to swap in any app from your dock),
+  **volume and brightness** sliders (drag or scroll), **now playing** for any app that shows media controls
+  (Spotify, browsers, Media Player…) with play/pause/skip, and a **calendar** with a note that's saved to
+  `%LOCALAPPDATA%\Restyle\note.txt`.
+- **Edit widgets**: right-click the dock or any widget (or use the Widgets page) and choose *Edit widgets*. Drag any widget anywhere, resize it with −/+, hide it with ×, or add any other widget with *Add widget*; every widget works with every style, and each style remembers its own arrangement. *Choose cities…* on the Widgets page picks the world clock's cities.
+- **Privacy**: weather and news are the only features that use the internet, and both are off until you set
+  them on the Widgets page. Weather sends only the chosen city's coordinates to [Open-Meteo](https://open-meteo.com/)
+  (free, no account or key; weather data by Open-Meteo.com, CC BY 4.0). News downloads only the RSS/Atom
+  feed address you enter.
+
 ## Build and run
 
 You need the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) on Windows 10 (1809+) or Windows 11.
 
 ```powershell
 dotnet build                          # build everything
+dotnet test                           # run the tests
 dotnet run --project src/Restyle.App  # start the app
 ```
 
@@ -79,6 +104,12 @@ Memory is kept low by software rendering (no GPU driver stack), a small GC nurse
 (`System.GC.Gen0Size` in the csproj) and idle heap compaction in the dock. Single-file compression is
 turned off on purpose: it halves the file but costs ~85 MB more RAM at runtime.
 
+### Microsoft Store edition
+
+`src/Restyle.Store` builds the same app as an `.msix` for the Microsoft Store (startup task instead of
+the Run key; Store-signed, auto-updating). Build it with `store\build-msix.ps1`; see
+[store/STORE-SUBMISSION.md](store/STORE-SUBMISSION.md) for the full submission walkthrough.
+
 ## What Restyle changes
 
 All values are under `HKEY_CURRENT_USER` unless noted. Changes are broadcast with `WM_SETTINGCHANGE`
@@ -99,7 +130,10 @@ All values are under `HKEY_CURRENT_USER` unless noted. Changes are broadcast wit
 | `taskbarTaskView` | `…\Explorer\Advanced\ShowTaskViewButton` | |
 | `wallpaper` | `SystemParametersInfo(SPI_SETDESKWALLPAPER)` + `Control Panel\Desktop\WallpaperStyle`/`TileWallpaper` | Restoring a slideshow/Spotlight setup restores only the image that was showing |
 | `cursorScheme` | `Control Panel\Cursors` (+ `…\Cursors\Schemes` in HKCU/HKLM, read-only for HKLM), `SystemParametersInfo(SPI_SETCURSORS)` | |
+| `lockScreen` | `Windows.System.UserProfile.LockScreen.SetImageFileAsync` (per user); `"spotlight"` turns Windows Spotlight back on (`HKCU\…\ContentDeliveryManager\RotatingLockScreenEnabled`) | Built-in pictures are `builtin:<wallpaper>-lock`: the wallpaper reframed for the lock screen clock |
 | `desktopIcons` | `…\Explorer\Advanced\HideIcons` | **Needs Explorer to restart.** Restyle asks first |
+| `dock` | Starts/stops `Restyle.exe --dock` | `true` / `false` |
+| `dockHideTaskbar`, `dockTopBar`, `dockBar`, `dockStartMenu`, `desktopWidgets`, `widgetGlass`, `widgetLayout` (`panel`/`glass`/`corners`) | `%LOCALAPPDATA%\Restyle\dock.json` | Take effect while the dock runs |
 
 Settings that don't exist on your Windows build are disabled in the UI and skipped by presets.
 Explorer is only ever restarted when a changed setting requires it, and only after you say yes.
@@ -113,6 +147,7 @@ Explorer is only ever restarted when a changed setting requires it, and only aft
 - `Presets\`: presets you saved or imported
 - `Wallpapers\`: built-in wallpapers, rendered at your screen resolution the first time they're used
 - `Cursors\`: cursor packs you imported (copied here; nothing in `C:\Windows` is touched)
+- `dock.json`, `note.txt`: dock and widget settings, and the calendar widget's note
 
 To remove Restyle completely, first restore your original settings if you want them back, then delete the exe
 and this folder.
@@ -147,12 +182,14 @@ Presets are small JSON files. Only the settings you list are changed; everything
 ```
 
 Built-in wallpaper ids: `gnome-blobs`, `plasma-shapes`, `soft-light`, `nord-waves`, `mint-hills`,
-`aqua-waves`, `midnight-waves`, `aubergine`, `pop-peaks`.
+`aqua-waves`, `midnight-waves`, `aubergine`, `pop-peaks`, `sunset-valley`, `night-sky`, `moonlit-hills`, `glass-bloom`.
 
 Where to put it:
 - **Just for you:** use *Presets ▸ Import a preset…*, or drop the file into `%LOCALAPPDATA%\Restyle\Presets\`
   (*Open presets folder* button).
 - **Ship it with the app:** add it to `src/Restyle.App/Presets/` (it's copied next to the exe and embedded).
+  The test `ShippedPresets_AreValidAndUseOnlyKnownSettings` fails the build if a shipped preset has a typo or an
+  unknown setting.
 
 No recompiling is needed to edit presets: change the JSON and switch back to the Presets page.
 
@@ -163,7 +200,9 @@ No recompiling is needed to edit presets: change the JSON and switch back to the
    implement `Read()` and `Apply(value)`. Give it an `Id`, a `Name` and a plain-language `Description`
    (shown as the tooltip). Override `MinimumBuild`, `RequiresExplorerRestart` or `BroadcastAreas` as needed.
 2. Register it in `SettingsCatalog`.
-3. Add a row for it in `CustomizePage` (`Switch(...)` or `Combo(...)` is usually one line).
+3. Add a row for it on the matching page in `src/Restyle.App/Pages/` (e.g. `CustomizePage` for Appearance) (`Switch(...)` or `Combo(...)` is usually one line).
+4. Add tests in `tests/Restyle.Core.Tests` using `TestRig`, which runs on a fake registry/system, so tests
+   never touch your real settings.
 
 Backups, undo, presets and the "what will change" list pick up the new setting automatically.
 
@@ -177,17 +216,18 @@ src/Restyle.Core/        settings layer, apply/undo engine, backups, presets (no
   Backup/, Presets/      snapshot and preset storage
 src/Restyle.App/         WPF UI (.NET 10 Fluent theme; follows light/dark mode automatically)
   Presets/               the built-in preset JSON files
-  Dock/                  dock, top bar and control center
+tests/Restyle.Core.Tests xUnit tests (fakes for everything; RealMachineTests only read)
 ```
 
 ## Contributing
 
 Ideas, bug reports and pull requests are welcome.
 
+- Run `dotnet test` before sending a change; the shipped presets are validated by the tests too.
 - New settings: see [Adding a new setting](#adding-a-new-setting-for-developers).
 - New presets: just add a JSON file to `src/Restyle.App/Presets/` (see [Adding a preset](#adding-a-preset)).
 - Keep the project's promises: per-user settings only, documented Windows APIs, everything undoable,
-  no network access.
+  no network access except the opt-in weather and news widgets.
 
 ## License
 

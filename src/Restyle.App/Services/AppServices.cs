@@ -20,7 +20,7 @@ public sealed class AppServices
         context.ResolvePath = Wallpapers.Resolve;
         context.DataDirectory = DataDirectory;
 
-        Catalog = new SettingsCatalog(context);
+        Catalog = new SettingsCatalog(context, [new LockScreenSetting(context), .. DockSettings.All(context)]);
         Engine = new SettingsEngine(Catalog, new ChangeHistory(Path.Combine(DataDirectory, "history.json")));
         Snapshots = new SnapshotStore(DataDirectory);
         Presets = new PresetStore(

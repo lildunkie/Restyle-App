@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSIX manifest for the Microsoft Store edition. store/build-msix.ps1 fills in the $TOKENS$.
+  Identity Name / Publisher / PublisherDisplayName MUST match what Partner Center shows under
+  Product management > Product identity after you reserve the app name.
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap5 desktop6 rescap">
+
+  <Identity Name="$IDENTITY_NAME$" Publisher="$PUBLISHER$" Version="$VERSION$" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>Restyle</DisplayName>
+    <PublisherDisplayName>$PUBLISHER_DISPLAY_NAME$</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <!-- Restyle's whole job is changing your real Windows settings (HKCU) and saving wallpapers/cursors
+         Windows itself reads, so the usual per-app sandbox copies must be turned off. Requires the
+         unvirtualizedResources capability below. -->
+    <desktop6:RegistryWriteVirtualization>disabled</desktop6:RegistryWriteVirtualization>
+    <desktop6:FileSystemWriteVirtualization>disabled</desktop6:FileSystemWriteVirtualization>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.18362.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="Restyle" Executable="Restyle.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Restyle"
+        Description="Make Windows look like macOS, GNOME, KDE and more, with one-click presets, a dock and a top bar. Every change can be undone."
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" Square71x71Logo="Assets\SmallTile.png" Square310x310Logo="Assets\LargeTile.png" />
+      </uap:VisualElements>
+
+      <Extensions>
+        <!-- "Start the dock when I sign in" (off until the user turns it on in the Dock page). -->
+        <uap5:Extension Category="windows.startupTask" Executable="Restyle.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap5:StartupTask TaskId="RestyleDock" Enabled="false" DisplayName="Restyle Dock" />
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="unvirtualizedResources" />
+    <!-- Wi-Fi / Bluetooth on-off tiles in the control center -->
+    <DeviceCapability Name="radios" />
+    <DeviceCapability Name="bluetooth" />
+  </Capabilities>
+</Package>

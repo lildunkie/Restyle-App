@@ -3,21 +3,24 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using Microsoft.Win32;
 using Restyle.App.Controls;
+using Restyle.App.Docking;
 using Restyle.App.Services;
 using Restyle.Core;
+using Restyle.Core.Dock;
 using Restyle.Core.Settings;
 using ThemeMode = Restyle.Core.Settings.ThemeMode;
 
 namespace Restyle.App.Pages;
 
 /// <summary>
-/// Manual controls. Every change applies right away (Windows itself is the live preview)
-/// and goes through the engine, so it shows up in "Undo last change".
+/// How Windows looks: light/dark, colors, wallpaper, lock screen picture, desktop icons and mouse pointer.
+/// Every change applies right away (Windows itself is the live preview) and is undoable.
 /// </summary>
-public sealed class CustomizePage : UserControl, IPage
+public sealed class CustomizePage : SettingsPage
 {
     private static readonly (string Hex, string Name)[] Swatches =
     [
@@ -27,156 +30,33 @@ public sealed class CustomizePage : UserControl, IPage
     ];
 
     private const string WindowsWallpaper = @"%SystemRoot%\Web\Wallpaper\Windows\img0.jpg";
-
-    private readonly List<Action> _refreshers = [];
-    private bool _loading;
+    private const string WindowsLockScreen = @"%SystemRoot%\Web\Screen\img100.jpg";
 
     public CustomizePage()
+        : base("Appearance", "Changes apply right away. Hover over any option for a plain-language explanation. Changed your mind? Use Undo last change.")
     {
-        var root = new StackPanel { Margin = new Thickness(28, 20, 28, 28), MaxWidth = 900, HorizontalAlignment = HorizontalAlignment.Left };
-        Content = new ScrollViewer { Content = root, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        Section("Light and dark");
+        Combo(Get<AppsThemeSetting>(), (ThemeMode.Light, "Light"), (ThemeMode.Dark, "Dark"));
+        Combo(Get<SystemThemeSetting>(), (ThemeMode.Light, "Light"), (ThemeMode.Dark, "Dark"));
 
-        root.Children.Add(Ui.Text("Customize", "PageTitle"));
-        root.Children.Add(Ui.Text(
-            "Changes apply right away. Hover over any option for a plain-language explanation. Changed your mind? Use Undo last change.",
-            "PageSubtitle"));
+        Section("Colors");
+        Root.Children.Add(AccentCard());
+        Switch(Get<AccentOnTitleBarsSetting>());
+        Switch(Get<AccentOnTaskbarSetting>());
+        Switch(Get<TransparencySetting>());
 
-        Section(root, "Colors");
-        Combo(root, Get<AppsThemeSetting>(), (ThemeMode.Light, "Light"), (ThemeMode.Dark, "Dark"));
-        Combo(root, Get<SystemThemeSetting>(), (ThemeMode.Light, "Light"), (ThemeMode.Dark, "Dark"));
-        root.Children.Add(AccentCard());
-        Switch(root, Get<AccentOnTitleBarsSetting>());
-        Switch(root, Get<AccentOnTaskbarSetting>());
-        Switch(root, Get<TransparencySetting>());
+        Section("Wallpaper");
+        Root.Children.Add(WallpaperCard());
+        Switch(Get<DesktopIconsSetting>());
 
-        Section(root, "Taskbar");
-        Combo(root, Get<TaskbarAlignmentSetting>(), (TaskbarAlignment.Left, "Left"), (TaskbarAlignment.Center, "Centered"));
-        Switch(root, Get<TaskbarAutoHideSetting>());
-        var search = new List<(SearchButtonMode, string)>
-        {
-            (SearchButtonMode.Hidden, "Hidden"), (SearchButtonMode.Icon, "Icon only"), (SearchButtonMode.Box, "Search box"),
-        };
-        if (S.Os.IsWindows11)
-            search.Add((SearchButtonMode.IconAndLabel, "Icon and label"));
-        Combo(root, Get<TaskbarSearchSetting>(), [.. search]);
-        Switch(root, Get<TaskbarWidgetsSetting>());
-        Switch(root, Get<TaskbarTaskViewSetting>());
+        Section("Lock screen");
+        Root.Children.Add(LockScreenCard());
+        Root.Children.Add(Pointer("Add a calendar, weather, your note and world times to the lock screen", "Widgets", "widgets"));
 
-        Section(root, "Desktop");
-        root.Children.Add(WallpaperCard());
-        Switch(root, Get<DesktopIconsSetting>());
-
-        Section(root, "Mouse pointer");
-        root.Children.Add(CursorCard());
+        Section("Mouse pointer");
+        Root.Children.Add(CursorCard());
 
         Refresh();
-    }
-
-    private static AppServices S => AppServices.Current;
-
-    private static T Get<T>() where T : ISetting => S.Catalog.Get<T>();
-
-    public void Refresh()
-    {
-        _loading = true;
-        try
-        {
-            foreach (var refresh in _refreshers)
-            {
-                try
-                {
-                    refresh();
-                }
-                catch (Exception)
-                {
-                    // One unreadable setting shouldn't blank the whole page.
-                }
-            }
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private static void Apply(ISetting setting, JsonNode? value) =>
-        MainWindow.Instance.Run(() => S.Engine.Set(setting.Id, value),
-            $"{setting.Name}: {setting.DescribeJson(value)}");
-
-    private static JsonNode? Json<T>(T value) => JsonSerializer.SerializeToNode(value, RestyleJson.Options);
-
-    private static T Read<T>(ISetting setting) => setting.ReadJson().Deserialize<T>(RestyleJson.Options)!;
-
-    // ---- Building blocks ---------------------------------------------------------------
-
-    private static void Section(Panel parent, string title) => parent.Children.Add(Ui.Text(title, "SectionHeader"));
-
-    /// <summary>A card with the setting's name and explanation on the left and its control on the right.</summary>
-    private static Border Row(ISetting setting, FrameworkElement control, UIElement? below = null)
-    {
-        var grid = new Grid();
-        grid.ColumnDefinitions.Add(new ColumnDefinition());
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
-        text.Children.Add(Ui.Text(setting.Name));
-        text.Children.Add(Ui.Text(setting.UnsupportedReason ?? setting.Description, "Hint"));
-        grid.Children.Add(text);
-
-        control.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(control, 1);
-        grid.Children.Add(control);
-
-        UIElement content = grid;
-        if (below is not null)
-        {
-            var stack = new StackPanel();
-            stack.Children.Add(grid);
-            stack.Children.Add(below);
-            content = stack;
-        }
-
-        var card = Ui.Card(content);
-        card.ToolTip = Ui.Tip(setting.Description);
-        if (!setting.IsSupported)
-        {
-            content.IsEnabled = false;
-            card.ToolTip = Ui.Tip($"{setting.UnsupportedReason} {setting.Description}");
-        }
-
-        return card;
-    }
-
-    private void Combo<T>(Panel parent, ISetting setting, params (T Value, string Label)[] options) where T : struct, Enum
-    {
-        var combo = new ComboBox { MinWidth = 160 };
-        foreach (var (value, label) in options)
-            combo.Items.Add(new ComboBoxItem { Content = label, Tag = value });
-
-        combo.SelectionChanged += (_, _) =>
-        {
-            if (!_loading && combo.SelectedItem is ComboBoxItem { Tag: T value })
-                Apply(setting, Json(value));
-        };
-        if (setting.IsSupported)
-        {
-            _refreshers.Add(() =>
-            {
-                var current = Read<T>(setting);
-                combo.SelectedItem = combo.Items.Cast<ComboBoxItem>().FirstOrDefault(i => i.Tag is T t && t.Equals(current));
-            });
-        }
-
-        parent.Children.Add(Row(setting, combo));
-    }
-
-    private void Switch(Panel parent, ISetting setting)
-    {
-        var box = new CheckBox { Style = (Style)FindResource("Switch") };
-        box.Click += (_, _) => Apply(setting, JsonValue.Create(box.IsChecked == true));
-        if (setting.IsSupported)
-            _refreshers.Add(() => box.IsChecked = Read<bool>(setting));
-        parent.Children.Add(Row(setting, box));
     }
 
     // ---- Accent color ------------------------------------------------------------------
@@ -232,7 +112,7 @@ public sealed class CustomizePage : UserControl, IPage
         below.Children.Add(swatches);
         below.Children.Add(autoRow);
 
-        _refreshers.Add(() =>
+        OnRefresh(() =>
         {
             var current = Read<AccentColor>(setting);
             hex.Text = current.Color;
@@ -287,7 +167,7 @@ public sealed class CustomizePage : UserControl, IPage
             fit.Items.Add(new ComboBoxItem { Content = f.ToString(), Tag = f });
         fit.SelectionChanged += (_, _) =>
         {
-            if (!_loading && fit.SelectedItem is ComboBoxItem { Tag: WallpaperFit f })
+            if (!Loading && fit.SelectedItem is ComboBoxItem { Tag: WallpaperFit f })
                 Apply(setting, Json(Read<Wallpaper>(setting) with { Fit = f }));
         };
 
@@ -312,7 +192,7 @@ public sealed class CustomizePage : UserControl, IPage
         below.Children.Add(tiles);
         below.Children.Add(current);
 
-        _refreshers.Add(() =>
+        OnRefresh(() =>
         {
             var value = Read<Wallpaper>(setting);
             fit.SelectedItem = fit.Items.Cast<ComboBoxItem>().First(i => (WallpaperFit)i.Tag == value.Fit);
@@ -340,6 +220,62 @@ public sealed class CustomizePage : UserControl, IPage
             };
             if (dialog.ShowDialog(Window.GetWindow(this)) == true)
                 Apply(setting, Json(new Wallpaper(dialog.FileName, CurrentFit())));
+        }
+    }
+
+    // ---- Lock screen -------------------------------------------------------------------
+
+    private Border LockScreenCard()
+    {
+        var setting = Get<LockScreenSetting>();
+        var spotlight = Ui.Button("Use Windows Spotlight", (_, _) => Apply(setting, JsonValue.Create(LockScreenSetting.Spotlight)),
+            tip: "Go back to Windows' daily changing pictures.");
+        spotlight.Margin = new Thickness(0);
+
+        var tiles = new WrapPanel { Margin = new Thickness(0, 12, 0, 0) };
+        var rings = new List<(string File, Border Ring)>();
+        foreach (var (path, name) in S.Wallpapers.LockScreens)
+        {
+            var value = path;
+            var ring = Tile(name, S.Wallpapers.Thumbnail(path), () => Apply(setting, JsonValue.Create(value)), tiles);
+            rings.Add((S.Wallpapers.LockFileFor(path), ring));
+        }
+
+        var windows = Environment.ExpandEnvironmentVariables(WindowsLockScreen);
+        if (File.Exists(windows))
+            rings.Add((windows, Tile("Windows", S.Wallpapers.Thumbnail(windows), () => Apply(setting, JsonValue.Create(WindowsLockScreen)), tiles)));
+        Tile("Browse…", null, BrowseLockScreen, tiles);
+
+        var current = Ui.Text("", "Hint", new Thickness(0, 4, 0, 0));
+        var below = new StackPanel();
+        below.Children.Add(tiles);
+        below.Children.Add(current);
+
+        OnRefresh(() =>
+        {
+            var value = Read<string>(setting);
+            current.Text = $"Current: {(value == LockScreenSetting.Spotlight ? "Windows Spotlight (changes daily)" : value)}";
+            foreach (var (file, ring) in rings)
+            {
+                if (string.Equals(file, value, StringComparison.OrdinalIgnoreCase))
+                    ring.SetResourceReference(Border.BorderBrushProperty, "AccentFillColorDefaultBrush");
+                else
+                    ring.BorderBrush = Brushes.Transparent;
+            }
+        });
+
+        return Row(setting, spotlight, below);
+
+        void BrowseLockScreen()
+        {
+            var dialog = new OpenFileDialog
+            {
+                Title = "Choose a lock screen picture",
+                Filter = "Pictures|*.jpg;*.jpeg;*.png;*.bmp|All files|*.*",
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
+            };
+            if (dialog.ShowDialog(Window.GetWindow(this)) == true)
+                Apply(setting, JsonValue.Create(dialog.FileName));
         }
     }
 
@@ -386,7 +322,7 @@ public sealed class CustomizePage : UserControl, IPage
         var combo = new ComboBox { MinWidth = 220 };
         combo.SelectionChanged += (_, _) =>
         {
-            if (!_loading && combo.SelectedItem is string name)
+            if (!Loading && combo.SelectedItem is string name)
                 Apply(setting, JsonValue.Create(name));
         };
 
@@ -395,7 +331,7 @@ public sealed class CustomizePage : UserControl, IPage
         import.Margin = new Thickness(0, 12, 0, 0);
         import.HorizontalAlignment = HorizontalAlignment.Left;
 
-        _refreshers.Add(() =>
+        OnRefresh(() =>
         {
             var currentName = setting.Describe(Read<CursorScheme>(setting));
             var names = CursorSchemeSetting.ListSchemes(S.Catalog.Context.Registry).ToList();

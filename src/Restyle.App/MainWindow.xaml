@@ -30,23 +30,35 @@
                 </StackPanel>
             </Button>
 
-            <StackPanel>
-                <RadioButton x:Name="NavPresets" Style="{StaticResource NavItem}" GroupName="Nav" Tag="presets" Checked="Nav_Checked">
+            <StackPanel x:Name="Nav">
+                <RadioButton Style="{StaticResource NavItem}" GroupName="Nav" Tag="presets" Checked="Nav_Checked">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE790;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16" Margin="0,0,12,0" VerticalAlignment="Center" />
                         <TextBlock Text="Presets" />
                     </StackPanel>
                 </RadioButton>
-                <RadioButton Style="{StaticResource NavItem}" GroupName="Nav" Tag="customize" Checked="Nav_Checked">
+                <RadioButton Style="{StaticResource NavItem}" GroupName="Nav" Tag="appearance" Checked="Nav_Checked">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE771;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16" Margin="0,0,12,0" VerticalAlignment="Center" />
-                        <TextBlock Text="Customize" />
+                        <TextBlock Text="Appearance" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource NavItem}" GroupName="Nav" Tag="taskbar" Checked="Nav_Checked">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xE7C4;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16" Margin="0,0,12,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Taskbar &amp; Start" />
                     </StackPanel>
                 </RadioButton>
                 <RadioButton Style="{StaticResource NavItem}" GroupName="Nav" Tag="dock" Checked="Nav_Checked">
                     <StackPanel Orientation="Horizontal">
                         <TextBlock Text="&#xE8A9;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16" Margin="0,0,12,0" VerticalAlignment="Center" />
                         <TextBlock Text="Dock" />
+                    </StackPanel>
+                </RadioButton>
+                <RadioButton Style="{StaticResource NavItem}" GroupName="Nav" Tag="widgets" Checked="Nav_Checked">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="&#xECA5;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="16" Margin="0,0,12,0" VerticalAlignment="Center" />
+                        <TextBlock Text="Widgets" />
                     </StackPanel>
                 </RadioButton>
                 <RadioButton Style="{StaticResource NavItem}" GroupName="Nav" Tag="backups" Checked="Nav_Checked">

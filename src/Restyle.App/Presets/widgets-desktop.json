@@ -1,0 +1,26 @@
+{
+  "name": "Widgets Desktop",
+  "description": "Purple sunset wallpaper with live desktop widgets: world clock, big clock, weather, analog clock, app shortcuts, volume and brightness, now playing and a calendar. Small dock, no taskbar, and a matching Start menu that opens in the middle of the screen.",
+  "order": 13,
+  "settings": {
+    "appsTheme": "dark",
+    "systemTheme": "dark",
+    "accentColor": "#B55FA8",
+    "accentOnTitleBars": false,
+    "accentOnTaskbar": true,
+    "transparency": true,
+    "taskbarAlignment": "center",
+    "wallpaper": "builtin:sunset-valley",
+    "lockScreen": "builtin:sunset-valley-lock",
+    "dockHideTaskbar": true,
+    "dockTopBar": false,
+    "dockStyle": "mac",
+    "dockPosition": "bottom",
+    "dockBar": true,
+    "widgetLayout": "panel",
+    "widgetGlass": false,
+    "desktopWidgets": true,
+    "dockStartMenu": true,
+    "dock": true
+  }
+}

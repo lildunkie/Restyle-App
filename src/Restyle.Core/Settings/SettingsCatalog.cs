@@ -3,7 +3,8 @@ namespace Restyle.Core.Settings;
 /// <summary>The list of every setting the app knows about. Register new settings here.</summary>
 public sealed class SettingsCatalog
 {
-    public SettingsCatalog(SettingContext context)
+    /// <param name="extra">Settings that live outside the core library (e.g. the app's dock and widgets).</param>
+    public SettingsCatalog(SettingContext context, IEnumerable<ISetting>? extra = null)
     {
         Context = context;
         All =
@@ -22,6 +23,7 @@ public sealed class SettingsCatalog
             new WallpaperSetting(context),
             new CursorSchemeSetting(context),
             new DesktopIconsSetting(context),
+            .. extra ?? [],
         ];
     }
 

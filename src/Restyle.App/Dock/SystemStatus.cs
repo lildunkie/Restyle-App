@@ -32,6 +32,16 @@ internal sealed class Audio
 
     public string DeviceName { get; private set; } = "";
 
+    /// <summary>How loud the sound playing right now is, 0..1 (for the music bars). 0 when silent.</summary>
+    public float Peak => Try(_ =>
+    {
+        float level = 0;
+        _meter?.GetPeakValue(out level);
+        return (float?)level;
+    }) ?? 0;
+
+    private IAudioMeterInformation? _meter;
+
     private T? Try<T>(Func<IAudioEndpointVolume, T?> action)
     {
         try
@@ -68,6 +78,9 @@ internal sealed class Audio
             var iid = typeof(IAudioEndpointVolume).GUID;
             device.Activate(ref iid, 23 /* CLSCTX_ALL */, IntPtr.Zero, out var obj);
             _volume = (IAudioEndpointVolume)obj;
+            var meterIid = typeof(IAudioMeterInformation).GUID;
+            device.Activate(ref meterIid, 23 /* CLSCTX_ALL */, IntPtr.Zero, out var meter);
+            _meter = (IAudioMeterInformation)meter;
             _deviceId = id;
             DeviceName = FriendlyName(device);
         }
@@ -137,6 +150,12 @@ internal sealed class Audio
         void GetChannelVolumeLevelScalar(uint channel, out float level);
         void SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, Guid context);
         void GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
+    }
+
+    [ComImport, Guid("C02216F6-8C67-4B5B-9D00-D008E73E0064"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IAudioMeterInformation
+    {
+        void GetPeakValue(out float peak);
     }
 
     [StructLayout(LayoutKind.Sequential)]

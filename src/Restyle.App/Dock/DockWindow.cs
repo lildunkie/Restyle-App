@@ -10,6 +10,7 @@ using System.Windows.Media.Effects;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using Microsoft.Win32;
+using Restyle.App.Services;
 using Restyle.Core.Dock;
 
 namespace Restyle.App.Docking;
@@ -22,9 +23,9 @@ public sealed class DockWindow : Window
 {
     private const double Pad = 8;
     private const double Gap = 6;
-    private const double BottomMargin = 6;
-    private const double LabelSpace = 44;
-    private const int IconPixels = 128;
+    private const double LabelSpace = 44;      // room above a bottom dock for the app-name label
+    private const double SideLabelSpace = 230; // room beside a side dock for the label
+    private const int LargeIconPixels = 256; // used while an icon is magnified
     private const string RecycleBin = "::{645FF040-5081-101B-9F08-00AA002F954E}";
 
     private readonly string _configPath;
@@ -51,9 +52,18 @@ public sealed class DockWindow : Window
     private string? _signature;
     private AppBar? _appBar;
     private FileSystemWatcher? _watcher;
+    private readonly DispatcherTimer _reloadDebounce = new() { Interval = TimeSpan.FromMilliseconds(150) };
+    private readonly DispatcherTimer _configCheck = new() { Interval = TimeSpan.FromSeconds(3) };
+    private string _configStamp = "";
+    private readonly DispatcherTimer _lockTimer = new() { Interval = TimeSpan.FromMinutes(15) };
+    private WallpaperLibrary? _lockPictures;
+    private string? _lockSignature;
     private Brush _dotBrush = Brushes.White;
+    private Brush _separatorBrush = Brushes.Gray;
     private static ImageSource? _startIcon;
     private TopBar? _topBar;
+    private DesktopWidgets? _widgets;
+    private StartMenu? _startMenu;
     private DateTime? _revealStarted;
 
     public DockWindow(string configPath)
@@ -62,6 +72,7 @@ public sealed class DockWindow : Window
         _config = DockConfig.Load(configPath);
 
         Title = "Restyle Dock";
+        UseLayoutRounding = true; // icons land on whole pixels instead of being smeared across two
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -72,14 +83,17 @@ public sealed class DockWindow : Window
 
         _label.Child = _labelText;
         _overlay.Children.Add(_label);
-        _panel.Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 2, Opacity = 0.35 };
         _root.Children.Add(_panel);
         _root.Children.Add(_items);
         _root.Children.Add(_overlay);
         Content = _root;
 
-        _items.SizeChanged += (_, _) => _panel.Width = _items.ActualWidth + 2 * Pad;
-        _root.MouseMove += (_, e) => Magnify(e.GetPosition(_root).X);
+        _items.SizeChanged += (_, _) => SizePanel();
+        _root.MouseMove += (_, e) =>
+        {
+            var p = e.GetPosition(_root);
+            Magnify(Vertical ? p.Y : p.X);
+        };
         _root.MouseLeave += (_, _) => ResetMagnify();
         _panel.MouseRightButtonUp += (_, e) =>
         {
@@ -105,9 +119,20 @@ public sealed class DockWindow : Window
         AppDomain.CurrentDomain.UnhandledException += (_, _) => RestoreDesktop();
     }
 
-    private double IconSize => _config.IconSize;
+    private DockLook Look => DockLook.For(_config.Style);
 
-    private double PanelHeight => IconSize + 19;
+    /// <summary>On the left or right edge (icons in a column) rather than along the bottom.</summary>
+    private bool Vertical => _config.Edge != DockConfig.BottomEdge;
+
+    private double IconSize => Math.Round(_config.IconSize * Look.IconScale);
+
+    /// <summary>The panel's thickness across the dock (its height at the bottom, its width on a side).</summary>
+    private double PanelHeight => IconSize + Look.Padding;
+
+    private bool MagnifyOn => _config.Magnify && Look.Magnify;
+
+    /// <summary>Space between the panel's edge and the icons (the running dot sits in it).</summary>
+    private double ItemInset => Math.Max(2, (Look.Padding - 7) / 2 - 2);
 
     // ---- Setup -------------------------------------------------------------------------
 
@@ -123,6 +148,8 @@ public sealed class DockWindow : Window
         Position();
         ApplyTaskbar();
         EnsureTopBar();
+        EnsureWidgets();
+        PrepareStartMenu();
 
         // Event-driven updates when windows appear/disappear, plus a slow safety poll.
         AddHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_HIDE);
@@ -131,21 +158,142 @@ public sealed class DockWindow : Window
 
         var dir = System.IO.Path.GetDirectoryName(_configPath)!;
         Directory.CreateDirectory(dir);
-        _watcher = new FileSystemWatcher(dir, System.IO.Path.GetFileName(_configPath)) { EnableRaisingEvents = true };
-        _watcher.Changed += (_, _) => Dispatcher.BeginInvoke(ReloadConfig, DispatcherPriority.Background);
-        _watcher.Created += (_, _) => Dispatcher.BeginInvoke(ReloadConfig, DispatcherPriority.Background);
+        // Pick up changes made in the Restyle window right away. The settings file is saved by swapping in
+        // a new copy, which Windows reports as a rename, so listen for every kind of change. A burst of
+        // saves (a preset sets several dock options) is applied once, a moment after the last one.
+        _watcher = new FileSystemWatcher(dir, "*.json") { EnableRaisingEvents = true };
+        FileSystemEventHandler changed = (_, e) => OnConfigFileEvent(e.Name);
+        _watcher.Changed += changed;
+        _watcher.Created += changed;
+        _watcher.Renamed += (_, e) => OnConfigFileEvent(e.Name);
+        _reloadDebounce.Tick += (_, _) =>
+        {
+            _reloadDebounce.Stop();
+            ReloadConfig();
+        };
+        _configStamp = ConfigStamp();
+
+        // Safety net in case Windows ever drops a file event: check every few seconds whether it changed.
+        _configCheck.Tick += (_, _) =>
+        {
+            if (ConfigStamp() != _configStamp)
+                ReloadConfig();
+
+            // Restyle was updated: restart on the new version (it takes over as soon as this one has closed).
+            if (UpdateCheck.UpdateReady())
+            {
+                _configCheck.Stop();
+                // Put the taskbar and screen space back, start the new version, then leave directly: this old
+                // copy's normal shutdown needs parts of the program file that were just replaced.
+                Cleanup();
+                UpdateCheck.Relaunch("--dock");
+                Environment.Exit(0);
+            }
+        };
+        _configCheck.Start();
+
+        // Lock screen widgets: keep the picture's calendar, weather and note up to date.
+        _lockTimer.Tick += (_, _) => RefreshLockScreen();
+        _lockTimer.Start();
+        RefreshLockScreen();
 
         Refresh();
     }
 
+    /// <summary>Redraws the lock screen widgets (only sets a new picture if something actually changed).</summary>
+    private async void RefreshLockScreen()
+    {
+        _lockSignature = LockSignature();
+        if (!_config.LockWidgets.Enabled)
+            return;
+        try
+        {
+            _lockPictures ??= new WallpaperLibrary(System.IO.Path.Combine(System.IO.Path.GetDirectoryName(_configPath)!, "Wallpapers"));
+            await LockScreenWidgets.RefreshAsync(_config, _lockPictures.Resolve);
+        }
+        catch (Exception ex)
+        {
+            ErrorLog.Write(ex); // never let the lock screen take the dock down
+        }
+    }
+
+    /// <summary>The settings that change what the lock screen widgets show.</summary>
+    private string LockSignature() => System.Text.Json.JsonSerializer.Serialize(new
+    {
+        _config.LockWidgets,
+        _config.Widgets.Cities,
+        _config.Widgets.WeatherLatitude,
+        _config.Widgets.WeatherLongitude,
+        _config.Widgets.Fahrenheit,
+    });
+
+    private void OnConfigFileEvent(string? name)
+    {
+        if (!string.Equals(name, System.IO.Path.GetFileName(_configPath), StringComparison.OrdinalIgnoreCase))
+            return;
+        Dispatcher.BeginInvoke(() =>
+        {
+            _reloadDebounce.Stop();
+            _reloadDebounce.Start();
+        });
+    }
+
+    /// <summary>When the settings file was last written and how big it is (changes whenever it's saved).</summary>
+    private string ConfigStamp()
+    {
+        try
+        {
+            var info = new FileInfo(_configPath);
+            return info.Exists ? $"{info.LastWriteTimeUtc.Ticks}:{info.Length}" : "";
+        }
+        catch (Exception)
+        {
+            return _configStamp;
+        }
+    }
+
     private void ReloadConfig()
     {
+        _configStamp = ConfigStamp();
         _config = DockConfig.Load(_configPath);
         _signature = null;
+        ApplyTheme(); // the style may have changed
+        if (LockSignature() != _lockSignature)
+            RefreshLockScreen();
         Position();
         ApplyTaskbar();
         EnsureTopBar();
+        EnsureWidgets();
+        PrepareStartMenu();
         Refresh();
+    }
+
+    /// <summary>Puts the desktop widgets into edit mode (turning them on first if they're off).</summary>
+    public void EditWidgets()
+    {
+        if (!_config.ShowWidgets)
+        {
+            _config.ShowWidgets = true;
+            _config.Save(_configPath);
+            EnsureWidgets();
+        }
+
+        _widgets?.EnterEditMode();
+    }
+
+    private void EnsureWidgets(bool force = false)
+    {
+        if (_config.ShowWidgets)
+        {
+            _widgets ??= new DesktopWidgets(this);
+            _widgets.Update(_config.Widgets, force);
+        }
+        else if (_widgets is not null)
+        {
+            _widgets.Close();
+            _widgets = null;
+            MemoryTrimmer.TrimNow();
+        }
     }
 
     private void EnsureTopBar()
@@ -207,6 +355,7 @@ public sealed class DockWindow : Window
 
             ShellNative.SetTaskbarsVisible(false);
             _taskbarHidden = true;
+            ReleaseTaskbarSpace(true);
             _taskbarGuard.Start();
         }
         else
@@ -215,8 +364,40 @@ public sealed class DockWindow : Window
             if (_taskbarHidden)
                 ShellNative.SetTaskbarsVisible(true);
             _taskbarHidden = false;
+            ReleaseTaskbarSpace(false);
         }
     }
+
+    /// <summary>
+    /// A hidden taskbar still reserves its strip at the bottom, so maximized windows would stop short of
+    /// the screen edge. While it's hidden we switch on auto-hide (which gives the space back) and switch
+    /// it off again afterwards — only if it was off before. A marker file remembers that we did it, so
+    /// it's undone even after a crash.
+    /// </summary>
+    private void ReleaseTaskbarSpace(bool release)
+    {
+        try
+        {
+            var system = new Restyle.Core.Platform.WindowsSystemApi();
+            if (release && !File.Exists(AutoHideMarker) && !system.GetTaskbarAutoHide())
+            {
+                File.WriteAllText(AutoHideMarker, "Restyle turned on taskbar auto-hide while the dock hides the taskbar.");
+                system.SetTaskbarAutoHide(true);
+            }
+            else if (!release && File.Exists(AutoHideMarker))
+            {
+                system.SetTaskbarAutoHide(false);
+                File.Delete(AutoHideMarker);
+            }
+        }
+        catch (Exception)
+        {
+            // Best effort: worst case maximized windows leave a gap where the taskbar was.
+        }
+    }
+
+    private static string AutoHideMarker => System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Restyle", "taskbar-autohide-by-dock");
 
     private void RestoreDesktop()
     {
@@ -225,6 +406,7 @@ public sealed class DockWindow : Window
             if (_taskbarHidden)
                 ShellNative.SetTaskbarsVisible(true);
             _taskbarHidden = false;
+            ReleaseTaskbarSpace(false);
             _appBar?.Dispose();
         }
         catch (Exception)
@@ -238,38 +420,133 @@ public sealed class DockWindow : Window
         if (_appBar is null)
             return;
 
-        var scale = VisualTreeHelper.GetDpi(this).DpiScaleY;
-        var band = PanelHeight + BottomMargin;
-        var height = band + IconSize * (DockMath.MaxScale - 1) + LabelSpace;
+        var look = Look;
+        var edge = _config.Edge;
+        var scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        var band = PanelHeight + look.EdgeMargin; // the strip kept free for the dock
+        var depth = band + (MagnifyOn ? IconSize * (DockMath.MaxScale - 1) : 0) + (Vertical ? SideLabelSpace : LabelSpace);
 
-        double bottom;
-        if (_config.ReserveSpace)
+        // Dock bar turned off: draw nothing (the empty window lets every click through) and reserve no space,
+        // while the top bar, widgets, Start menu and hidden taskbar keep running in this process.
+        _root.Visibility = _config.ShowDock ? Visibility.Visible : Visibility.Collapsed;
+
+        var newEdge = edge switch { DockConfig.LeftEdge => AppBar.ABE_LEFT, DockConfig.RightEdge => AppBar.ABE_RIGHT, _ => AppBar.ABE_BOTTOM };
+        if (_appBar.IsRegistered && _appBar.Edge != newEdge)
+            _appBar.Dispose(); // moving to another edge: give the old strip back first
+        _appBar.Edge = newEdge;
+
+        double outer; // the screen edge the dock sits against
+        if (_config.ReserveSpace && _config.ShowDock)
         {
             _appBar.Register();
-            bottom = _appBar.Reserve((int)Math.Ceiling(band * scale)) / scale;
+            outer = _appBar.Reserve((int)Math.Ceiling(band * scale)) / scale;
         }
         else
         {
             _appBar.Dispose();
-            bottom = SystemParameters.WorkArea.Bottom;
+            var wa = SystemParameters.WorkArea;
+            outer = edge switch { DockConfig.LeftEdge => wa.Left, DockConfig.RightEdge => wa.Right, _ => wa.Bottom };
         }
 
-        Left = 0;
-        Width = SystemParameters.PrimaryScreenWidth;
-        Height = height;
-        Top = bottom - height;
-        _panel.Height = PanelHeight;
-        _panel.Margin = new Thickness(0, 0, 0, BottomMargin);
-        _items.Margin = new Thickness(0, 0, 0, BottomMargin + 4);
+        var work = SystemParameters.WorkArea;
+        var m = look.EdgeMargin;
+        var inset = m + ItemInset;
+        switch (edge)
+        {
+            case DockConfig.LeftEdge:
+            case DockConfig.RightEdge:
+                var left = edge == DockConfig.LeftEdge;
+                Width = depth;
+                Left = left ? outer : outer - depth;
+                Top = work.Top;
+                Height = work.Height;
+                _panel.HorizontalAlignment = _items.HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+                _panel.VerticalAlignment = look.FullLength ? VerticalAlignment.Stretch : VerticalAlignment.Center;
+                _items.VerticalAlignment = VerticalAlignment.Center;
+                _items.Orientation = Orientation.Vertical;
+                _panel.Margin = left ? new Thickness(m, 0, 0, 0) : new Thickness(0, 0, m, 0);
+                _items.Margin = left ? new Thickness(inset, 0, 0, 0) : new Thickness(0, 0, inset, 0);
+                _panel.Width = PanelHeight;
+                _panel.Height = double.NaN;
+                break;
+
+            default:
+                Left = 0;
+                Width = SystemParameters.PrimaryScreenWidth;
+                Height = depth;
+                Top = outer - depth;
+                _panel.VerticalAlignment = _items.VerticalAlignment = VerticalAlignment.Bottom;
+                _panel.HorizontalAlignment = look.FullLength ? HorizontalAlignment.Stretch : HorizontalAlignment.Center;
+                _items.HorizontalAlignment = HorizontalAlignment.Center;
+                _items.Orientation = Orientation.Horizontal;
+                _panel.Margin = new Thickness(0, 0, 0, m);
+                _items.Margin = new Thickness(0, 0, 0, inset);
+                _panel.Height = PanelHeight;
+                _panel.Width = double.NaN;
+                break;
+        }
+
+        _panel.CornerRadius = new CornerRadius(_config.Style == DockConfig.PillStyle ? PanelHeight / 2 : look.Radius);
+        _panel.BorderThickness = look.FullLength
+            ? edge switch { DockConfig.LeftEdge => new Thickness(0, 0, 1, 0), DockConfig.RightEdge => new Thickness(1, 0, 0, 0), _ => new Thickness(0, 1, 0, 0) }
+            : new Thickness(1);
+        SizePanel();
+    }
+
+    /// <summary>The panel hugs the icons (plus padding), or spans the whole edge for the bar style.</summary>
+    private void SizePanel()
+    {
+        if (Look.FullLength)
+        {
+            _panel.Width = Vertical ? PanelHeight : double.NaN;
+            _panel.Height = Vertical ? double.NaN : PanelHeight;
+        }
+        else if (Vertical)
+        {
+            _panel.Height = _items.ActualHeight + 2 * Pad;
+        }
+        else
+        {
+            _panel.Width = _items.ActualWidth + 2 * Pad;
+        }
     }
 
     private void ApplyTheme()
     {
         var light = Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "SystemUsesLightTheme", 0) is 1;
         Brush B(uint argb) => new SolidColorBrush(Color.FromArgb((byte)(argb >> 24), (byte)(argb >> 16), (byte)(argb >> 8), (byte)argb));
+        Brush G(uint top, uint bottom) => new LinearGradientBrush(((SolidColorBrush)B(top)).Color, ((SolidColorBrush)B(bottom)).Color, 90);
 
-        _panel.Background = light ? B(0xE0F4F4F4) : B(0xD91E1E1E);
-        _panel.BorderBrush = light ? B(0x22000000) : B(0x38FFFFFF);
+        switch (_config.Style)
+        {
+            case DockConfig.GlassStyle:
+                // Frosted glass: a see-through milky panel, brighter at the top, with a light hairline edge.
+                _panel.Background = light ? G(0xA6FFFFFF, 0x66F0F2F8) : G(0x80A4A4B8, 0x4C3A3A4A);
+                _panel.BorderBrush = light ? G(0xFFFFFFFF, 0x80FFFFFF) : G(0xD9FFFFFF, 0x33FFFFFF);
+                break;
+            case DockConfig.ClearStyle:
+                // No panel at all, just the icons (an almost invisible fill keeps right-click working).
+                _panel.Background = B(0x01000000);
+                _panel.BorderBrush = Brushes.Transparent;
+                break;
+            case DockConfig.BarStyle:
+                _panel.Background = light ? B(0xF2F3F3F3) : B(0xF01C1C1F);
+                _panel.BorderBrush = light ? B(0x22000000) : B(0x30FFFFFF);
+                break;
+            case DockConfig.PillStyle:
+                _panel.Background = light ? B(0xF2FAFAFA) : B(0xEB222226);
+                _panel.BorderBrush = light ? B(0x22000000) : B(0x38FFFFFF);
+                break;
+            default:
+                _panel.Background = light ? B(0xE0F4F4F4) : B(0xD91E1E1E);
+                _panel.BorderBrush = light ? B(0x22000000) : B(0x38FFFFFF);
+                break;
+        }
+
+        _panel.Effect = Look.Shadow
+            ? new DropShadowEffect { BlurRadius = 18, ShadowDepth = 2, Opacity = _config.Style == DockConfig.GlassStyle ? 0.22 : 0.35 }
+            : null;
+        _separatorBrush = light ? B(0x33000000) : B(0x40FFFFFF);
         _dotBrush = light ? B(0xCC000000) : B(0xE6FFFFFF);
         _label.Background = light ? B(0xF8FFFFFF) : B(0xF0262626);
         _labelText.Foreground = light ? B(0xFF1A1A1A) : Brushes.White;
@@ -282,6 +559,19 @@ public sealed class DockWindow : Window
             if (entry.Dot is not null)
                 entry.Dot.Fill = _dotBrush;
         }
+    }
+
+    /// <summary>What each dock style changes: shape, spacing, icon size and effects.</summary>
+    private sealed record DockLook(double Radius, double EdgeMargin, double Padding, double IconScale, bool Magnify, bool Shadow, bool FullLength)
+    {
+        public static DockLook For(string style) => style switch
+        {
+            DockConfig.GlassStyle => new(22, 8, 20, 1, Magnify: true, Shadow: true, FullLength: false),
+            DockConfig.ClearStyle => new(16, 6, 19, 1, Magnify: true, Shadow: false, FullLength: false),
+            DockConfig.BarStyle => new(0, 0, 16, 0.8, Magnify: false, Shadow: false, FullLength: true),
+            DockConfig.PillStyle => new(0, 12, 14, 0.72, Magnify: false, Shadow: true, FullLength: false),
+            _ => new(16, 6, 19, 1, Magnify: true, Shadow: true, FullLength: false),
+        };
     }
 
     // ---- Model -------------------------------------------------------------------------
@@ -321,7 +611,7 @@ public sealed class DockWindow : Window
         entries.Add(new DockEntry(EntryKind.Separator, "sep", ""));
         entries.Add(new DockEntry(EntryKind.Trash, "trash", "Recycle Bin"));
 
-        var signature = string.Join("|", entries.Select(e => e.Key)) + $"#{IconSize}";
+        var signature = string.Join("|", entries.Select(e => e.Key)) + $"#{IconSize}#{_config.Style}#{_config.Edge}";
         if (signature == _signature)
         {
             // Same apps in the same places: just update windows and running dots.
@@ -346,28 +636,32 @@ public sealed class DockWindow : Window
         _hovered = null;
         _label.Visibility = Visibility.Collapsed;
 
+        // Bottom dock: icon above its running dot. Side dock: the dot sits between the icon and the screen edge.
+        var edge = _config.Edge;
+        var across = IconSize * 0.15 + 7; // keeps separators lined up with the icons, clear of the dot
         foreach (var entry in _entries)
         {
             if (entry.Kind == EntryKind.Separator)
             {
-                entry.View = new Rectangle
+                entry.View = edge switch
                 {
-                    Width = 1,
-                    Height = IconSize * 0.7,
-                    Fill = _panel.BorderBrush,
-                    Margin = new Thickness(Gap, 0, Gap, IconSize * 0.15 + 7),
-                    VerticalAlignment = VerticalAlignment.Bottom,
+                    DockConfig.LeftEdge => new Rectangle { Height = 1, Width = IconSize * 0.7, Margin = new Thickness(across, Gap, 0, Gap), HorizontalAlignment = HorizontalAlignment.Left },
+                    DockConfig.RightEdge => new Rectangle { Height = 1, Width = IconSize * 0.7, Margin = new Thickness(0, Gap, across, Gap), HorizontalAlignment = HorizontalAlignment.Right },
+                    _ => new Rectangle { Width = 1, Height = IconSize * 0.7, Margin = new Thickness(Gap, 0, Gap, across), VerticalAlignment = VerticalAlignment.Bottom },
                 };
+                ((Rectangle)entry.View).Fill = _separatorBrush;
                 _items.Children.Add(entry.View);
                 continue;
             }
 
+            entry.RestIcon = IconFor(entry, RestPixels);
+            entry.LargeIcon = null; // loaded the first time this icon is magnified
             entry.Image = new Image
             {
-                Source = IconFor(entry),
+                Source = entry.RestIcon,
                 Width = IconSize,
                 Height = IconSize,
-                VerticalAlignment = VerticalAlignment.Bottom,
+                VerticalAlignment = Vertical ? VerticalAlignment.Center : VerticalAlignment.Bottom,
                 RenderTransform = new TranslateTransform(),
             };
             RenderOptions.SetBitmapScalingMode(entry.Image, BitmapScalingMode.HighQuality);
@@ -375,14 +669,37 @@ public sealed class DockWindow : Window
             {
                 Width = 4,
                 Height = 4,
-                Margin = new Thickness(0, 3, 0, 0),
+                Margin = edge switch { DockConfig.LeftEdge => new Thickness(0, 0, 3, 0), DockConfig.RightEdge => new Thickness(3, 0, 0, 0), _ => new Thickness(0, 3, 0, 0) },
+                VerticalAlignment = VerticalAlignment.Center,
                 Fill = _dotBrush,
                 Visibility = entry.Windows.Count > 0 ? Visibility.Visible : Visibility.Hidden,
             };
 
-            var stack = new StackPanel { Margin = new Thickness(Gap / 2, 0, Gap / 2, 0), Background = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Bottom };
-            stack.Children.Add(entry.Image);
-            stack.Children.Add(entry.Dot);
+            var stack = new StackPanel { Background = Brushes.Transparent };
+            switch (edge)
+            {
+                case DockConfig.LeftEdge:
+                    stack.Orientation = Orientation.Horizontal;
+                    stack.HorizontalAlignment = HorizontalAlignment.Left;
+                    stack.Margin = new Thickness(0, Gap / 2, 0, Gap / 2);
+                    stack.Children.Add(entry.Dot);
+                    stack.Children.Add(entry.Image);
+                    break;
+                case DockConfig.RightEdge:
+                    stack.Orientation = Orientation.Horizontal;
+                    stack.HorizontalAlignment = HorizontalAlignment.Right;
+                    stack.Margin = new Thickness(0, Gap / 2, 0, Gap / 2);
+                    stack.Children.Add(entry.Image);
+                    stack.Children.Add(entry.Dot);
+                    break;
+                default:
+                    stack.VerticalAlignment = VerticalAlignment.Bottom;
+                    stack.Margin = new Thickness(Gap / 2, 0, Gap / 2, 0);
+                    stack.Children.Add(entry.Image);
+                    stack.Children.Add(entry.Dot);
+                    break;
+            }
+
             stack.MouseEnter += (_, _) => _hovered = entry;
             stack.MouseLeave += (_, _) =>
             {
@@ -401,25 +718,28 @@ public sealed class DockWindow : Window
         }
     }
 
-    private ImageSource? IconFor(DockEntry entry)
+    /// <summary>The exact pixel size icons are shown at when not magnified (so they're drawn 1:1, razor sharp).</summary>
+    private int RestPixels => (int)Math.Round(IconSize * VisualTreeHelper.GetDpi(this).DpiScaleX);
+
+    private ImageSource? IconFor(DockEntry entry, int pixels)
     {
         switch (entry.Kind)
         {
             case EntryKind.Start:
                 return StartIcon;
             case EntryKind.Trash:
-                return ShellNative.Icon(RecycleBin, IconPixels, cache: false); // empty/full changes
+                return ShellNative.Icon(RecycleBin, pixels, cache: false); // empty/full changes
         }
 
         if (entry.Pin is { } pin)
         {
             return pin.Kind == PinKind.AppId
-                ? ShellNative.Icon("shell:AppsFolder\\" + pin.Target, IconPixels)
-                : ShellNative.Icon(Environment.ExpandEnvironmentVariables(pin.Target), IconPixels);
+                ? ShellNative.Icon("shell:AppsFolder\\" + pin.Target, pixels)
+                : ShellNative.Icon(Environment.ExpandEnvironmentVariables(pin.Target), pixels);
         }
 
-        return (entry.AppId is not null ? ShellNative.Icon("shell:AppsFolder\\" + entry.AppId, IconPixels) : null)
-            ?? (entry.ExePath is not null ? ShellNative.Icon(entry.ExePath, IconPixels) : null);
+        return (entry.AppId is not null ? ShellNative.Icon("shell:AppsFolder\\" + entry.AppId, pixels) : null)
+            ?? (entry.ExePath is not null ? ShellNative.Icon(entry.ExePath, pixels) : null);
     }
 
     /// <summary>A launcher-style grid icon for the Start button.</summary>
@@ -448,19 +768,30 @@ public sealed class DockWindow : Window
 
     // ---- Interaction -------------------------------------------------------------------
 
-    private void Magnify(double mouseX)
+    /// <param name="mouse">The mouse position along the dock (x for a bottom dock, y for a side dock).</param>
+    private void Magnify(double mouse)
     {
         MemoryTrimmer.Touch();
-        if (_config.Magnify)
+        if (MagnifyOn)
         {
-            var widths = _entries.Select(e => e.Kind == EntryKind.Separator ? 1 + 2 * Gap : IconSize + Gap).ToList();
-            var x = _root.ActualWidth / 2 - widths.Sum() / 2;
+            var sizes = _entries.Select(e => e.Kind == EntryKind.Separator ? 1 + 2 * Gap : IconSize + Gap).ToList();
+            var length = Vertical ? _root.ActualHeight : _root.ActualWidth;
+            var pos = length / 2 - sizes.Sum() / 2;
             for (var i = 0; i < _entries.Count; i++)
             {
-                var center = x + widths[i] / 2;
-                x += widths[i];
-                if (_entries[i].Image is { } image)
-                    image.Width = image.Height = IconSize * DockMath.Scale(mouseX - center, IconSize);
+                var center = pos + sizes[i] / 2;
+                pos += sizes[i];
+                if (_entries[i].Image is not { } image)
+                    continue;
+                var entry = _entries[i];
+                var scale = DockMath.Scale(mouse - center, IconSize);
+                image.Width = image.Height = Math.Round(IconSize * scale); // whole sizes: no shimmer while zooming
+
+                // Zoomed: switch to the big icon so it's sharp instead of stretched; back to the exact-size one at rest.
+                if (scale > 1.02)
+                    image.Source = entry.LargeIcon ??= IconFor(entry, LargeIconPixels) ?? entry.RestIcon;
+                else if (image.Source != entry.RestIcon)
+                    image.Source = entry.RestIcon;
             }
         }
 
@@ -472,7 +803,10 @@ public sealed class DockWindow : Window
         foreach (var entry in _entries)
         {
             if (entry.Image is { } image)
+            {
                 image.Width = image.Height = IconSize;
+                image.Source = entry.RestIcon;
+            }
         }
 
         _hovered = null;
@@ -490,9 +824,26 @@ public sealed class DockWindow : Window
         _labelText.Text = _hovered.Windows.Count > 1 ? $"{_hovered.Name} ({_hovered.Windows.Count} windows)" : _hovered.Name;
         _root.UpdateLayout();
         _label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        var top = view.TranslatePoint(new Point(view.ActualWidth / 2, 0), _root);
-        Canvas.SetLeft(_label, top.X - _label.DesiredSize.Width / 2);
-        Canvas.SetTop(_label, Math.Max(0, top.Y - _label.DesiredSize.Height - 8));
+        var size = _label.DesiredSize;
+        switch (_config.Edge)
+        {
+            case DockConfig.LeftEdge: // beside the icon, toward the middle of the screen
+                var right = view.TranslatePoint(new Point(view.ActualWidth, view.ActualHeight / 2), _root);
+                Canvas.SetLeft(_label, right.X + 10);
+                Canvas.SetTop(_label, right.Y - size.Height / 2);
+                break;
+            case DockConfig.RightEdge:
+                var left = view.TranslatePoint(new Point(0, view.ActualHeight / 2), _root);
+                Canvas.SetLeft(_label, Math.Max(0, left.X - size.Width - 10));
+                Canvas.SetTop(_label, left.Y - size.Height / 2);
+                break;
+            default: // above the icon
+                var top = view.TranslatePoint(new Point(view.ActualWidth / 2, 0), _root);
+                Canvas.SetLeft(_label, top.X - size.Width / 2);
+                Canvas.SetTop(_label, Math.Max(0, top.Y - size.Height - 8));
+                break;
+        }
+
         _label.Visibility = Visibility.Visible;
     }
 
@@ -503,7 +854,7 @@ public sealed class DockWindow : Window
             switch (entry.Kind)
             {
                 case EntryKind.Start:
-                    ShellNative.OpenStartMenu();
+                    OpenStart();
                     return;
                 case EntryKind.Trash:
                     ShellNative.Start("explorer.exe", "shell:RecycleBinFolder");
@@ -546,23 +897,99 @@ public sealed class DockWindow : Window
         Bounce(entry);
     }
 
-    private static void Bounce(DockEntry entry)
+    /// <summary>The launch "bounce": away from the screen edge the dock sits on.</summary>
+    private void Bounce(DockEntry entry)
     {
         if (entry.Image?.RenderTransform is not TranslateTransform move)
             return;
-        var animation = new DoubleAnimation(0, -14, TimeSpan.FromMilliseconds(220))
+        var distance = _config.Edge == DockConfig.LeftEdge ? 14 : -14;
+        var animation = new DoubleAnimation(0, distance, TimeSpan.FromMilliseconds(220))
         {
             AutoReverse = true,
             RepeatBehavior = new RepeatBehavior(2),
             EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut },
         };
-        move.BeginAnimation(TranslateTransform.YProperty, animation);
+        move.BeginAnimation(Vertical ? TranslateTransform.XProperty : TranslateTransform.YProperty, animation);
+    }
+
+    internal static string StyleName(string style) => style switch
+    {
+        DockConfig.GlassStyle => "Liquid glass",
+        DockConfig.ClearStyle => "Transparent",
+        DockConfig.BarStyle => "Bar",
+        DockConfig.PillStyle => "Minimal pill",
+        _ => "Mac",
+    };
+
+    /// <summary>The Start button: Restyle's centered Start menu (if turned on) or the Windows one. Click again to close.</summary>
+    public void OpenStart()
+    {
+        if (!_config.RestyleStart)
+        {
+            ShellNative.OpenStartMenu();
+            return;
+        }
+
+        if (_startMenu is { IsVisible: true })
+        {
+            _startMenu.HideMenu();
+            return;
+        }
+
+        // The click that hid it (by taking focus away) shouldn't immediately reopen it.
+        if (_startMenu is not null && (DateTime.Now - _startMenu.HiddenAt).TotalMilliseconds < 300)
+            return;
+
+        EnsureStartMenu().ShowCentered();
+    }
+
+    /// <summary>One Start menu, kept hidden between uses so it opens instantly; rebuilt if the theme changed.</summary>
+    private StartMenu EnsureStartMenu()
+    {
+        if (_startMenu is { IsStale: true })
+        {
+            _startMenu.Close();
+            _startMenu = null;
+        }
+
+        if (_startMenu is null)
+        {
+            var menu = new StartMenu(this);
+            menu.Closed += (_, _) =>
+            {
+                if (_startMenu == menu)
+                    _startMenu = null;
+            };
+            _startMenu = menu;
+        }
+
+        return _startMenu;
+    }
+
+    /// <summary>Reads the app list and builds the Start menu in the background, ready for the first click.</summary>
+    private void PrepareStartMenu()
+    {
+        if (!_config.RestyleStart)
+            return;
+        StartMenu.Preload().ContinueWith(_ => Dispatcher.BeginInvoke(() =>
+        {
+            if (_config.RestyleStart && _startMenu is not { IsVisible: true })
+                EnsureStartMenu().Warm();
+            StartMenu.PrefetchIcons();
+        }, DispatcherPriority.ApplicationIdle), TaskScheduler.Default);
+    }
+
+    /// <summary>A context menu in the dock's style (also used by the desktop widgets).</summary>
+    internal ContextMenu CreateMenu()
+    {
+        var menu = new ContextMenu { Style = (Style)_menuResources["DockContextMenu"] };
+        menu.Resources.MergedDictionaries.Add(_menuResources);
+        return menu;
     }
 
     private void ShowMenu(DockEntry? entry)
     {
-        var menu = new ContextMenu { Style = (Style)_menuResources["DockContextMenu"] };
-        menu.Resources.MergedDictionaries.Add(_menuResources);
+        var menu = CreateMenu();
 
         void Add(string header, Action action, bool enabled = true)
         {
@@ -604,7 +1031,23 @@ public sealed class DockWindow : Window
             _config.Magnify = !_config.Magnify;
             SaveConfig();
         });
-        Add("Dock settingsâ€¦", () => ShellNative.Start(Environment.ProcessPath!, null));
+        // Quick switches; every option is on the Dock page.
+        var nextStyle = DockConfig.Styles[(Array.IndexOf(DockConfig.Styles, _config.Style) + 1) % DockConfig.Styles.Length];
+        Add($"Style: {StyleName(_config.Style)} (next: {StyleName(nextStyle)})", () =>
+        {
+            _config.Style = nextStyle;
+            SaveConfig();
+        });
+        var nextEdge = DockConfig.Edges[(Array.IndexOf(DockConfig.Edges, _config.Edge) + 1) % DockConfig.Edges.Length];
+        Add($"Move to the {nextEdge} of the screen", () =>
+        {
+            _config.Edge = nextEdge;
+            SaveConfig();
+        });
+        Add(_config.ShowWidgets ? "Edit widgets (move, resize, add, hide)" : "Show desktop widgets", EditWidgets);
+        Add("Dock settings…", () => ShellNative.Start(Environment.ProcessPath!, "--page dock"));
+        if (_config.ShowWidgets)
+            Add("Widget settings…", () => ShellNative.Start(Environment.ProcessPath!, "--page widgets"));
         Add("Quit dock", Close);
 
         menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
@@ -661,6 +1104,7 @@ public sealed class DockWindow : Window
                 Position();
                 ApplyTaskbar();
                 _topBar?.ExplorerRestarted();
+                EnsureWidgets(force: true); // re-attach to the new desktop window
             });
         }
 
@@ -707,8 +1151,13 @@ public sealed class DockWindow : Window
             UnhookWinEvent(hook);
         _hooks.Clear();
         _watcher?.Dispose();
+        _configCheck.Stop();
+        _reloadDebounce.Stop();
+        _lockTimer.Stop();
         _taskbarGuard.Stop();
         _topBar?.Close();
+        _widgets?.Close();
+        _startMenu?.Close();
         RestoreDesktop();
     }
 
@@ -731,6 +1180,8 @@ public sealed class DockWindow : Window
         public List<AppWindow> Windows { get; set; } = [];
         public FrameworkElement? View { get; set; }
         public Image? Image { get; set; }
+        public ImageSource? RestIcon { get; set; }
+        public ImageSource? LargeIcon { get; set; }
         public Ellipse? Dot { get; set; }
     }
 

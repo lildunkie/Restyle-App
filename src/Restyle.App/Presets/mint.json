@@ -13,6 +13,7 @@
     "taskbarSearch": "icon",
     "taskbarWidgets": false,
     "taskbarTaskView": true,
-    "wallpaper": "builtin:mint-hills"
+    "wallpaper": "builtin:mint-hills",
+    "lockScreen": "builtin:mint-hills-lock"
   }
 }

@@ -14,6 +14,7 @@
     "taskbarWidgets": false,
     "taskbarTaskView": false,
     "cursorScheme": "Windows Black",
-    "wallpaper": "builtin:aqua-waves"
+    "wallpaper": "builtin:aqua-waves",
+    "lockScreen": "builtin:aqua-waves-lock"
   }
 }

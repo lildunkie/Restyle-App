@@ -1,0 +1,24 @@
+{
+  "name": "Moonlit",
+  "description": "A warm moon over dark hills. Big gold-and-cyan date and clock in the corners, music bars that move with your sound, weather, and a glass app column instead of a dock.",
+  "order": 15,
+  "settings": {
+    "appsTheme": "dark",
+    "systemTheme": "dark",
+    "accentColor": "#E8C77E",
+    "accentOnTitleBars": false,
+    "accentOnTaskbar": true,
+    "transparency": true,
+    "taskbarAlignment": "center",
+    "wallpaper": "builtin:moonlit-hills",
+    "lockScreen": "builtin:moonlit-hills-lock",
+    "dockHideTaskbar": true,
+    "dockTopBar": false,
+    "dockBar": false,
+    "dockStartMenu": true,
+    "widgetLayout": "corners",
+    "widgetGlass": true,
+    "desktopWidgets": true,
+    "dock": true
+  }
+}

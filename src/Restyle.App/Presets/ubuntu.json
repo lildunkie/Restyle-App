@@ -13,6 +13,7 @@
     "taskbarSearch": "icon",
     "taskbarWidgets": false,
     "taskbarTaskView": true,
-    "wallpaper": "builtin:aubergine"
+    "wallpaper": "builtin:aubergine",
+    "lockScreen": "builtin:aubergine-lock"
   }
 }

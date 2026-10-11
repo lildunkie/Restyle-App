@@ -13,6 +13,7 @@
     "taskbarSearch": "hidden",
     "taskbarWidgets": false,
     "taskbarTaskView": false,
-    "wallpaper": "builtin:soft-light"
+    "wallpaper": "builtin:soft-light",
+    "lockScreen": "builtin:soft-light-lock"
   }
 }

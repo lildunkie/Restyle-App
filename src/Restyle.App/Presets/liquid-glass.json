@@ -1,0 +1,26 @@
+{
+  "name": "Liquid Glass",
+  "description": "Glowing color blooms behind frosted-glass widgets: world clock, big clock, weather, apps, volume and brightness, now playing and a calendar. Top bar, small dock and a matching Start menu.",
+  "order": 16,
+  "settings": {
+    "appsTheme": "dark",
+    "systemTheme": "dark",
+    "accentColor": "#8F7BFF",
+    "accentOnTitleBars": false,
+    "accentOnTaskbar": true,
+    "transparency": true,
+    "taskbarAlignment": "center",
+    "wallpaper": "builtin:glass-bloom",
+    "lockScreen": "builtin:glass-bloom-lock",
+    "dockHideTaskbar": true,
+    "dockTopBar": true,
+    "dockStyle": "glass",
+    "dockPosition": "bottom",
+    "dockBar": true,
+    "dockStartMenu": true,
+    "widgetLayout": "panel",
+    "widgetGlass": true,
+    "desktopWidgets": true,
+    "dock": true
+  }
+}

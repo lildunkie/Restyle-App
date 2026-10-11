@@ -13,6 +13,7 @@
     "taskbarSearch": "icon",
     "taskbarWidgets": false,
     "taskbarTaskView": true,
-    "wallpaper": "builtin:pop-peaks"
+    "wallpaper": "builtin:pop-peaks",
+    "lockScreen": "builtin:pop-peaks-lock"
   }
 }

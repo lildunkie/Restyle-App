@@ -16,6 +16,7 @@
     "taskbarTaskView": true,
     "desktopIcons": true,
     "cursorScheme": "Windows Default",
-    "wallpaper": "%SystemRoot%\\Web\\Wallpaper\\Windows\\img0.jpg"
+    "wallpaper": "%SystemRoot%\\Web\\Wallpaper\\Windows\\img0.jpg",
+    "lockScreen": "%SystemRoot%\\Web\\Screen\\img100.jpg"
   }
 }

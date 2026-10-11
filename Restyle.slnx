@@ -2,5 +2,9 @@
   <Folder Name="/src/">
     <Project Path="src/Restyle.App/Restyle.App.csproj" />
     <Project Path="src/Restyle.Core/Restyle.Core.csproj" />
+    <Project Path="src/Restyle.Store/Restyle.Store.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Restyle.Core.Tests/Restyle.Core.Tests.csproj" />
   </Folder>
 </Solution>

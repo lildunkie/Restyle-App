@@ -26,28 +26,82 @@ public partial class MainWindow : Window
 {
     private readonly Dictionary<string, FrameworkElement> _pages = [];
     private Action? _bannerAction;
+    private string _currentPage = "presets";
 
-    public MainWindow()
+    public MainWindow(string? startPage = null)
     {
         InitializeComponent();
         Services.Engine.History.Changed += UpdateUndo;
         UpdateUndo();
-        NavPresets.IsChecked = true;
+        ShowPage(startPage ?? "presets");
+
+        // Offer a restart when a newer Restyle has been installed while this window is open.
+        var updateTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+        updateTimer.Tick += (_, _) =>
+        {
+            if (!UpdateCheck.UpdateReady())
+                return;
+            updateTimer.Stop();
+            ShowMessage("Restyle has been updated. Restart it to use the new version.", MessageKind.Info, "Restart now", () =>
+            {
+                // Leave immediately: this old copy's normal shutdown needs parts of the program file that were just replaced.
+                UpdateCheck.Relaunch($"--page {_currentPage}");
+                Environment.Exit(0);
+            });
+        };
+        updateTimer.Start();
     }
 
     public static MainWindow Instance => (MainWindow)Application.Current.MainWindow;
 
+    /// <summary>Restyle was opened again: show this window instead of starting a second copy.</summary>
+    public void BringToFront(string? page)
+    {
+        if (PresentationSource.FromVisual(this) is null)
+        {
+            // This window is already gone (we're on our way out): step aside so the new copy can open.
+            Environment.Exit(0);
+            return;
+        }
+
+        if (WindowState == WindowState.Minimized)
+            WindowState = WindowState.Normal;
+        Show();
+        Activate();
+        Topmost = true; // Windows only lets a background app come forward like this
+        Topmost = false;
+        if (page is { Length: > 0 })
+            ShowPage(page);
+        else
+            (PageHost.Content as IPage)?.Refresh(); // show the current state (another window may have changed things)
+    }
+
     private static AppServices Services => AppServices.Current;
+
+    /// <summary>Opens a page by name ("presets", "appearance", "taskbar", "dock", "widgets", "backups", "about").</summary>
+    public void ShowPage(string page)
+    {
+        page = page == "customize" ? "appearance" : page; // the old name for Appearance
+        var item = Nav.Children.OfType<RadioButton>().FirstOrDefault(r => (string)r.Tag == page)
+            ?? Nav.Children.OfType<RadioButton>().First();
+        if (item.IsChecked == true)
+            Navigate((string)item.Tag);
+        else
+            item.IsChecked = true; // navigates via Nav_Checked
+    }
 
     public void Navigate(string page)
     {
+        _currentPage = page;
         if (!_pages.TryGetValue(page, out var view))
         {
             view = page switch
             {
                 "presets" => new PresetsPage(),
-                "customize" => new CustomizePage(),
+                "appearance" => new CustomizePage(),
+                "taskbar" => new TaskbarPage(),
                 "dock" => new DockPage(),
+                "widgets" => new WidgetsPage(),
                 "backups" => new BackupsPage(),
                 _ => new AboutPage(),
             };

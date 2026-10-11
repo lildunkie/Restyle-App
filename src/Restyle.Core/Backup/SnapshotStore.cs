@@ -43,6 +43,25 @@ public sealed class SnapshotStore(string directory)
         return true;
     }
 
+    /// <summary>
+    /// Settings added in later versions aren't in an older "original" snapshot. Add them the first time
+    /// this version runs, with the value <paramref name="valueFor"/> gives (their state before Restyle).
+    /// </summary>
+    public void AddMissingToOriginal(IEnumerable<string> ids, Func<string, JsonNode?> valueFor)
+    {
+        if (LoadOriginal() is not { } original)
+            return;
+        var added = false;
+        foreach (var id in ids.Where(id => !original.Settings.ContainsKey(id)))
+        {
+            original.Settings[id] = valueFor(id);
+            added = true;
+        }
+
+        if (added)
+            Write(OriginalPath, original);
+    }
+
     public IReadOnlyList<Snapshot> ListBackups()
     {
         if (!System.IO.Directory.Exists(BackupsDirectory))
